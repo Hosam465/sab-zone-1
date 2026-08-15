@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAB Mobile Preview & Testing</title>
+<style>
+  :root {
+    --sab-red: #C93E32;
+    --sab-red-light: #E8583F;
+    --sab-ink: #0A0605;
+    --sab-ink2: #170A08;
+    --success: #28a745;
+    --bg-color: #12080a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 30% 20%, #2a1210 0%, var(--bg-color) 60%);
+    min-height: 100vh;
+    margin: 0;
+    gap: 18px;
+  }
+
+  .conn-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #bbb;
+    letter-spacing: 0.03em;
+  }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #888; transition: background 0.3s, box-shadow 0.3s; }
+  .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .status-dot.offline { background: #dc3545; box-shadow: 0 0 8px #dc3545; }
+
+  /* Polished Device Frame */
+  .mobile-device {
+    width: 375px;
+    height: 812px;
+    background: #fff;
+    border: 14px solid #111;
+    border-radius: 40px;
+    box-shadow: 0 20px 60px rgba(201,62,50,0.15), 0 20px 50px rgba(0,0,0,0.5);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  /* Mock Device Notch */
+  .mobile-device::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 150px;
+    height: 25px;
+    background: #111;
+    border-bottom-left-radius: 15px;
+    border-bottom-right-radius: 15px;
+    z-index: 10;
+  }
+
+  #render-screen {
+    flex-grow: 1;
+    background: #f6f4f3;
+    padding: 40px 20px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    transition: all 0.3s ease;
+  }
+
+  /* Premium UI Components */
+  .ui-header_nav { background: var(--sab-red); color: white; padding: 20px; text-align: center; font-weight: 600; font-size: 1.1rem; border-radius: 12px; box-shadow: 0 4px 10px rgba(201,62,50,0.25); }
+  .ui-account_card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid var(--sab-red); }
+  .ui-account_card .title { font-size: 0.9rem; color: #666; margin-bottom: 5px; }
+  .ui-account_card .amount { font-size: 1.5rem; font-weight: bold; color: #333; }
+
+  .ui-form_field { background: white; padding: 14px 18px; border: 1px solid #ddd; border-radius: 12px; }
+  .ui-form_field .label { font-size: 0.75rem; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .ui-form_field .value { color: #b3b3b3; font-size: 1rem; }
+
+  .ui-widget_insights { background: white; padding: 18px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+  .ui-widget_insights .title { font-size: 0.85rem; font-weight: 700; color: #666; margin-bottom: 10px; }
+  .ui-widget_insights .bars { display: flex; align-items: flex-end; gap: 6px; height: 40px; }
+  .ui-widget_insights .bars span { flex: 1; background: linear-gradient(180deg, var(--sab-red-light), var(--sab-red)); border-radius: 3px; }
+
+  .ui-banner_offer { background: linear-gradient(135deg, var(--sab-red-light), var(--sab-red)); padding: 18px; border-radius: 12px; text-align: center; font-weight: bold; color: #fff; box-shadow: 0 4px 10px rgba(201,62,50,0.3); }
+
+  .ui-carousel_for_you { display: flex; flex-direction: column; gap: 8px; }
+  .ui-carousel_for_you .label { font-size: 0.85rem; font-weight: 700; color: #666; }
+  .ui-carousel_for_you .cards { display: flex; gap: 10px; }
+  .ui-carousel_for_you .cards div { flex: 1; background: white; border-radius: 12px; padding: 14px 10px; text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--sab-ink); box-shadow: 0 3px 10px rgba(0,0,0,0.05); border-top: 3px solid var(--sab-red); }
+
+  .ui-submit_button { background: var(--success); color: white; padding: 18px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3); margin-top: auto; }
+
+  .ui-bottom_nav { display: flex; justify-content: space-around; background: white; padding: 12px 4px; border-radius: 14px; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); margin-top: auto; }
+  .ui-bottom_nav span { font-size: 0.7rem; font-weight: 600; color: #999; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .ui-bottom_nav span:first-child { color: var(--sab-red); }
+  .ui-bottom_nav span .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Slide-up Usability Form */
+  #usability-test {
+    display: none;
+    background: #fff;
+    padding: 25px 20px;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+    animation: slideUp 0.4s ease-out;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  #usability-test h4 { margin: 0 0 15px 0; color: var(--sab-ink); text-align: center; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 0.85rem; color: #555; margin-bottom: 5px; font-weight: bold;}
+  .btn-group { display: flex; gap: 8px; }
+  .toggle-btn { flex: 1; padding: 10px; background: #eee; border: none; border-radius: 8px; cursor: pointer; color: #555; font-weight: 500; transition: 0.2s; }
+  .toggle-btn.selected { background: var(--sab-red); color: white; }
+
+  textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-family: inherit; resize: none; }
+  .submit-feedback-btn { width: 100%; padding: 12px; background: var(--sab-ink); color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+
+  .waiting-msg { text-align: center; color: #aaa; margin-top: 60%; font-size: 1.1rem; font-weight: 500; }
+
+  /* Non-blocking toast (a native alert() would freeze an unattended kiosk if nobody taps OK) */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--sab-ink);
+    color: #fff;
+    padding: 14px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 100;
+    max-width: 320px;
+    text-align: center;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.error { background: #dc3545; }
+
+  /* Simple Star Rating */
+  .rating { display: flex; flex-direction: row-reverse; justify-content: center; gap: 5px; }
+  .rating input { display: none; }
+  .rating label { font-size: 30px; color: #ccc; cursor: pointer; }
+  .rating input:checked ~ label { color: #ffcc00; }
+</style>
+</head>
+<body>
+
+<div class="conn-status">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">Connecting…</span>
+</div>
+
+<div class="mobile-device">
+  <div id="render-screen">
+    <div class="waiting-msg">Waiting for Build Station...</div>
+  </div>
+
+  <!-- Live Usability Testing Form -->
+  <div id="usability-test">
+    <h4>Usability Feedback</h4>
+
+    <div class="form-group">
+      <label>How clear was this journey?</label>
+      <div class="btn-group">
+        <button class="toggle-btn option-btn" data-group="clarity" data-val="Clear">Clear</button>
+        <button class="toggle-btn option-btn" data-group="clarity" data-val="Unclear">Unclear</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Was it easy to use?</label>
+      <div class="btn-group">
+        <button class="toggle-btn option-btn" data-group="difficulty" data-val="Easy">Easy</button>
+        <button class="toggle-btn option-btn" data-group="difficulty" data-val="Difficult">Difficult</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Would you use this?</label>
+      <div class="btn-group">
+        <button class="toggle-btn option-btn" data-group="intent" data-val="Would use">Would Use</button>
+        <button class="toggle-btn option-btn" data-group="intent" data-val="Would not use">Wouldn't Use</button>
+      </div>
+    </div>
+
+    <div class="form-group" style="text-align: center;">
+      <label>Overall Rating</label>
+      <div class="rating">
+        <input type="radio" name="stars" id="star5" value="5"><label for="star5">★</label>
+        <input type="radio" name="stars" id="star4" value="4"><label for="star4">★</label>
+        <input type="radio" name="stars" id="star3" value="3"><label for="star3">★</label>
+        <input type="radio" name="stars" id="star2" value="2"><label for="star2">★</label>
+        <input type="radio" name="stars" id="star1" value="1"><label for="star1">★</label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <textarea id="comment" rows="2" placeholder="Short improvement comment..."></textarea>
+    </div>
+
+    <button class="submit-feedback-btn" onclick="submitFeedback()">Submit Feedback</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Firebase Logic -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  import { getDatabase, ref, onValue, set, push } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAe1rTA29BEcV491zEQFizL8axiDasX6a4",
+    authDomain: "drop-75326.firebaseapp.com",
+    databaseURL: "https://drop-75326-default-rtdb.firebaseio.com",
+    projectId: "drop-75326",
+    storageBucket: "drop-75326.firebasestorage.app",
+    messagingSenderId: "860967558056",
+    appId: "1:860967558056:web:3b32b2ce92f14ccc459b9d"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // Real connection indicator
+  const dot = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  onValue(ref(db, '.info/connected'), (snap) => {
+    const connected = snap.val() === true;
+    dot.className = 'status-dot ' + (connected ? 'online' : 'offline');
+    text.textContent = connected ? 'Live & Connected' : 'Reconnecting…';
+  });
+
+  // Real-time listener
+  const sessionRef = ref(db, 'sessions/active_demo');
+
+  onValue(sessionRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data && data.status === "preview_ready") {
+      renderMobileUI(data.canvas);
+    } else if (data && data.status === "assembling") {
+      resetUI();
+    }
+  });
+
+  function renderMobileUI(canvasArray) {
+    const screen = document.getElementById('render-screen');
+    const testingBlock = document.getElementById('usability-test');
+
+    screen.innerHTML = '';
+
+    const componentRenderers = {
+      header_nav: () => `SAB Navigation`,
+      account_card: () => `<div class="title">Primary Account</div><div class="amount">SAR 12,450.00</div>`,
+      form_field: () => `<div class="label">Amount</div><div class="value">Enter amount...</div>`,
+      widget_insights: () => `<div class="title">This Month's Spending</div><div class="bars"><span style="height:40%"></span><span style="height:70%"></span><span style="height:55%"></span><span style="height:90%"></span><span style="height:35%"></span></div>`,
+      banner_offer: () => `🌟 Activate Your Travel Card`,
+      carousel_for_you: () => `<div class="label">For You</div><div class="cards"><div>Travel Offer</div><div>2x Points</div><div>Cashback</div></div>`,
+      submit_button: () => `Confirm Transaction`,
+      bottom_nav: () => `<span><span class="dot"></span>Home</span><span><span class="dot"></span>Transfers</span><span><span class="dot"></span>Cards</span><span><span class="dot"></span>More</span>`,
+    };
+
+    canvasArray.forEach(item => {
+      const uiElement = document.createElement('div');
+      uiElement.className = 'ui-' + item.type;
+      const render = componentRenderers[item.type];
+      uiElement.innerHTML = render ? render() : 'Component';
+      screen.appendChild(uiElement);
+    });
+
+    testingBlock.style.display = 'block';
+  }
+
+  function resetUI() {
+    document.getElementById('render-screen').innerHTML = '<div class="waiting-msg">Waiting for Build Station...</div>';
+    document.getElementById('usability-test').style.display = 'none';
+
+    // Reset buttons and form
+    document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+    document.getElementById('comment').value = '';
+    const checkedStar = document.querySelector('input[name="stars"]:checked');
+    if(checkedStar) checkedStar.checked = false;
+
+    window.feedbackData = {}; // Clear global object
+  }
+
+  // --- UI Logic for the Form ---
+  window.feedbackData = {};
+
+  document.querySelectorAll('.option-btn').forEach(button => {
+    button.addEventListener('click', function() {
+      const group = this.getAttribute('data-group');
+      const val = this.getAttribute('data-val');
+
+      // Deselect siblings
+      document.querySelectorAll(`.option-btn[data-group="${group}"]`).forEach(btn => btn.classList.remove('selected'));
+      // Select this
+      this.classList.add('selected');
+      // Store value
+      window.feedbackData[group] = val;
+    });
+  });
+
+  let toastTimer;
+  function showToast(message, isError) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = isError ? 'show error' : 'show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.className = ''; }, 3200);
+  }
+
+  // Submit Feedback to Firebase
+  window.submitFeedback = function() {
+    const comment = document.getElementById('comment').value;
+    const starInput = document.querySelector('input[name="stars"]:checked');
+    const rating = starInput ? starInput.value : null;
+
+    if (!window.feedbackData.clarity || !window.feedbackData.difficulty || !window.feedbackData.intent || !rating) {
+      showToast('Please complete all feedback options before submitting.', true);
+      return;
+    }
+
+    const finalFeedback = {
+      ...window.feedbackData,
+      rating: rating,
+      comment: comment,
+      timestamp: Date.now()
+    };
+
+    // 1. Push feedback to a 'feedback' node
+    const feedbackListRef = ref(db, 'feedback');
+    push(feedbackListRef, finalFeedback);
+
+    // 2. Reset the active session back to 'assembling' for the next participant
+    set(sessionRef, {
+      sessionId: "active_demo",
+      journeyType: "Transfer",
+      status: "assembling",
+      canvas: []
+    }).then(() => {
+      showToast('Feedback submitted! Resetting for the next participant.');
+    });
+  };
+</script>
+
+</body>
+</html>
