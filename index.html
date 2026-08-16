@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Never serve a stale copy. A cached Build Station silently publishes sessions
+     without a designer name, which makes every rating award points to nobody. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>SAB Digital Factory: Build Station</title>
 <style>
   :root {
@@ -78,7 +83,7 @@
     background: #fff;
     border: 1px solid #d8d2cf;
     color: var(--text-main);
-    padding: 12px 15px;
+    padding: 14px 15px;
     margin-bottom: 10px;
     cursor: grab;
     border-radius: 8px;
@@ -86,12 +91,39 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    transition: all 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    /* Touch drag is handled manually via Pointer Events — tell the browser not to
+       hijack the gesture for scrolling/zooming, or the drag never starts on a tablet. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
   .draggable-item:hover { border-color: var(--sab-red); box-shadow: 0 4px 8px rgba(201,62,50,0.12); transform: translateY(-2px); }
-  .draggable-item:active, .draggable-item.dragging { cursor: grabbing; transform: scale(0.98); }
+  .draggable-item.dragging { opacity: 0.45; transform: scale(0.98); }
   .icon-placeholder { width: 24px; height: 24px; background: #f4dcd8; border-radius: 4px; display: inline-block; flex-shrink: 0;}
+
+  .panel-hint { font-size: 0.78rem; color: var(--text-muted); margin: -8px 0 14px; line-height: 1.4; }
+
+  /* Floating element that follows the finger/cursor during a drag */
+  .drag-ghost {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 500;
+    pointer-events: none;
+    background: #fff;
+    border: 2px solid var(--sab-red);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--text-main);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    opacity: 0.96;
+    will-change: transform;
+  }
 
   /* Center Panel: Canvas Area */
   .canvas-container {
@@ -226,6 +258,64 @@
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.error { background: var(--danger); }
 
+  /* Designer-name modal, shown right after "Finish & Preview" */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 6, 5, 0.65);
+    backdrop-filter: blur(3px);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px;
+    width: 90%;
+    max-width: 360px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    animation: modalIn 0.25s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-card h3 { margin: 0 0 6px; color: var(--sab-ink); font-size: 1.15rem; }
+  .modal-card p { margin: 0 0 18px; color: var(--text-muted); font-size: 0.88rem; line-height: 1.4; }
+  .modal-card input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #d8d2cf;
+    border-radius: 10px;
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+  .modal-card input:focus { outline: 2px solid var(--sab-red); outline-offset: 1px; }
+  .modal-error { color: var(--danger); font-size: 0.8rem; min-height: 18px; margin-bottom: 6px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .modal-actions .btn { flex: 1; padding: 12px; }
+
+  /* Live designer leaderboard */
+  .leaderboard { margin-top: 10px; border-top: 1px solid #e6e1df; padding-top: 16px; }
+  .leaderboard h3 { display: flex; align-items: center; gap: 6px; }
+  .leaderboard-list { display: flex; flex-direction: column; gap: 8px; }
+  .leaderboard-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f8f7f6;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+  .leaderboard-row .rank { font-weight: 700; color: var(--text-muted); width: 20px; }
+  .leaderboard-row .name { flex: 1; font-weight: 600; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .leaderboard-row .pts { font-weight: 700; color: var(--sab-red); }
+  .leaderboard-empty { color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+
 </style>
 </head>
 <body>
@@ -258,29 +348,30 @@
     </div>
 
     <h3>2. Design System Components</h3>
+    <p class="panel-hint">Drag a component onto the phone — or just tap it to add.</p>
 
-    <div class="draggable-item" draggable="true" data-type="header_nav">
+    <div class="draggable-item" data-type="header_nav">
       <div class="icon-placeholder"></div> Top Header / Title
     </div>
-    <div class="draggable-item" draggable="true" data-type="account_card">
+    <div class="draggable-item" data-type="account_card">
       <div class="icon-placeholder"></div> Account Balance Card
     </div>
-    <div class="draggable-item" draggable="true" data-type="form_field">
+    <div class="draggable-item" data-type="form_field">
       <div class="icon-placeholder"></div> Input Form Field
     </div>
-    <div class="draggable-item" draggable="true" data-type="widget_insights">
+    <div class="draggable-item" data-type="widget_insights">
       <div class="icon-placeholder"></div> Spending Insights Widget
     </div>
-    <div class="draggable-item" draggable="true" data-type="banner_offer">
+    <div class="draggable-item" data-type="banner_offer">
       <div class="icon-placeholder"></div> Promotional Banner
     </div>
-    <div class="draggable-item" draggable="true" data-type="carousel_for_you">
+    <div class="draggable-item" data-type="carousel_for_you">
       <div class="icon-placeholder"></div> "For You" Carousel
     </div>
-    <div class="draggable-item" draggable="true" data-type="submit_button">
+    <div class="draggable-item" data-type="submit_button">
       <div class="icon-placeholder"></div> Primary Action Button
     </div>
-    <div class="draggable-item" draggable="true" data-type="bottom_nav">
+    <div class="draggable-item" data-type="bottom_nav">
       <div class="icon-placeholder"></div> Bottom Navigation Bar
     </div>
   </div>
@@ -297,12 +388,33 @@
   <div class="action-panel">
     <h3>3. Publish Journey</h3>
     <p>Assemble the mobile banking flow on the canvas, then push it live to the test device.</p>
-    <button class="btn btn-primary" onclick="submitJourney()">Finish & Preview</button>
+    <button class="btn btn-primary" onclick="attemptPublish()">Finish & Preview</button>
     <button class="btn btn-secondary" onclick="clearCanvas()">Reset Canvas</button>
+
+    <div class="leaderboard">
+      <h3>🏆 Top Designers</h3>
+      <div class="leaderboard-list" id="leaderboard-list">
+        <p class="leaderboard-empty">No ratings yet</p>
+      </div>
+    </div>
   </div>
 </div>
 
 <div id="toast"></div>
+
+<!-- Designer Name Modal -->
+<div class="modal-overlay" id="name-modal">
+  <div class="modal-card">
+    <h3>Who built this journey?</h3>
+    <p>Your name is published with this screen — visitors who rate it award you points on the leaderboard.</p>
+    <input type="text" id="designer-name-input" placeholder="e.g. Hossam Sayed" maxlength="40" />
+    <div class="modal-error" id="designer-name-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeNameModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmPublish()">Publish</button>
+    </div>
+  </div>
+</div>
 
 <!-- Firebase Initialization -->
 <script type="module">
@@ -335,6 +447,40 @@
     text.textContent = connected ? 'System Online & Connected' : 'Reconnecting…';
     document.querySelector('.btn-primary').disabled = !connected;
   });
+
+  // Live designer leaderboard — updates in real time as visitors rate published journeys
+  const leaderboardList = document.getElementById('leaderboard-list');
+  onValue(ref(db, 'designers'), (snapshot) => {
+    const data = snapshot.val();
+    if (!data) {
+      leaderboardList.innerHTML = '<p class="leaderboard-empty">No ratings yet</p>';
+      return;
+    }
+    const rows = Object.values(data)
+      .filter((d) => d && typeof d.totalPoints === 'number')
+      .sort((a, b) => b.totalPoints - a.totalPoints)
+      .slice(0, 5);
+
+    if (rows.length === 0) {
+      leaderboardList.innerHTML = '<p class="leaderboard-empty">No ratings yet</p>';
+      return;
+    }
+
+    const medals = ['🥇', '🥈', '🥉'];
+    leaderboardList.innerHTML = rows.map((row, i) => `
+      <div class="leaderboard-row">
+        <span class="rank">${medals[i] || (i + 1)}</span>
+        <span class="name">${escapeHtml(row.name)}</span>
+        <span class="pts">${row.totalPoints} pts</span>
+      </div>
+    `).join('');
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+  }
 </script>
 
 <!-- Application Logic -->
@@ -343,7 +489,8 @@
     sessionId: "active_demo",
     journeyType: "Transfer", // Default value
     status: "assembling",
-    canvas: []
+    canvas: [],
+    designerName: ""
   };
 
   // Update journey type when dropdown changes
@@ -355,38 +502,95 @@
   const canvas = document.getElementById('canvas');
   const emptyStateText = document.getElementById('empty-state-text');
 
-  draggables.forEach(draggable => {
-    draggable.addEventListener('dragstart', (event) => {
-      draggable.classList.add('dragging');
-      event.dataTransfer.setData('text/plain', draggable.getAttribute('data-type'));
-      event.dataTransfer.setData('label', draggable.innerText.trim());
-    });
+  /* ---------------------------------------------------------------------------
+     Drag and drop via Pointer Events.
 
-    draggable.addEventListener('dragend', () => {
-      draggable.classList.remove('dragging');
-    });
-  });
+     The HTML5 drag-and-drop API (dragstart/dragover/drop) does not fire at all on
+     touch devices, so on a tablet the component library was completely unusable.
+     Pointer Events cover mouse, touch and pen through one code path, so the booth
+     behaves identically on a touchscreen kiosk and a laptop.
 
-  canvas.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    canvas.classList.add('drag-over');
-  });
+     A short movement threshold also lets a plain tap add the component, which is
+     faster and far more reliable than dragging on a touchscreen.
+  --------------------------------------------------------------------------- */
+  const DRAG_THRESHOLD_PX = 8;
+  let dragState = null;
 
-  canvas.addEventListener('dragleave', () => {
+  function isOverCanvas(x, y) {
+    const r = canvas.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+
+  function moveGhost(ghost, x, y) {
+    ghost.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+  }
+
+  function endDrag(commit, x, y) {
+    if (!dragState) return;
+    const { item, type, label, moved, ghost } = dragState;
+
+    if (ghost) ghost.remove();
+    item.classList.remove('dragging');
     canvas.classList.remove('drag-over');
-  });
 
-  canvas.addEventListener('drop', (e) => {
-    e.preventDefault();
-    canvas.classList.remove('drag-over');
+    // A tap (no meaningful movement) adds the component; a drag only adds it if
+    // released over the canvas, so dragging away stays a valid way to cancel.
+    const shouldAdd = commit && (!moved || isOverCanvas(x, y));
+    dragState = null;
 
-    const componentType = e.dataTransfer.getData('text/plain');
-    const componentLabel = e.dataTransfer.getData('label');
-
-    if (componentType) {
-      addComponentToCanvas(componentType, componentLabel);
+    if (shouldAdd) {
+      addComponentToCanvas(type, label);
       updateScreenState();
     }
+  }
+
+  draggables.forEach((item) => {
+    item.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      dragState = {
+        item,
+        type: item.getAttribute('data-type'),
+        label: item.innerText.trim(),
+        startX: e.clientX,
+        startY: e.clientY,
+        pointerId: e.pointerId,
+        moved: false,
+        ghost: null,
+      };
+      // Capture so we keep receiving events even once the finger leaves the item.
+      item.setPointerCapture(e.pointerId);
+    });
+
+    item.addEventListener('pointermove', (e) => {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+
+      if (!dragState.moved) {
+        const dx = e.clientX - dragState.startX;
+        const dy = e.clientY - dragState.startY;
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+
+        dragState.moved = true;
+        dragState.item.classList.add('dragging');
+        const ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.textContent = dragState.label;
+        document.body.appendChild(ghost);
+        dragState.ghost = ghost;
+      }
+
+      moveGhost(dragState.ghost, e.clientX, e.clientY);
+      canvas.classList.toggle('drag-over', isOverCanvas(e.clientX, e.clientY));
+    });
+
+    item.addEventListener('pointerup', (e) => {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      endDrag(true, e.clientX, e.clientY);
+    });
+
+    item.addEventListener('pointercancel', (e) => {
+      if (!dragState || e.pointerId !== dragState.pointerId) return;
+      endDrag(false, e.clientX, e.clientY);
+    });
   });
 
   function addComponentToCanvas(type, label) {
@@ -451,18 +655,59 @@
     toastTimer = setTimeout(() => { toast.className = ''; }, 3200);
   }
 
-  function submitJourney() {
+  function attemptPublish() {
     if (screenState.canvas.length === 0) {
       showToast('Drag at least one component onto the canvas first.', true);
       return;
     }
-
-    screenState.status = "preview_ready";
-
     if (!window.firebaseDb) {
       showToast('Still connecting to the database — try again in a moment.', true);
       return;
     }
+    openNameModal();
+  }
+
+  function openNameModal() {
+    const input = document.getElementById('designer-name-input');
+    // Deliberately always blank. This is a shared booth station: pre-filling the
+    // previous visitor's name makes it far too easy for the next person to publish
+    // under it by accident, crediting their points to the wrong employee.
+    input.value = '';
+    document.getElementById('designer-name-error').textContent = '';
+    document.getElementById('name-modal').classList.add('show');
+    setTimeout(() => { input.focus(); }, 50);
+  }
+
+  function closeNameModal() {
+    document.getElementById('name-modal').classList.remove('show');
+  }
+
+  // Publish on Enter from the name field
+  document.getElementById('designer-name-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') confirmPublish();
+  });
+
+  function confirmPublish() {
+    const input = document.getElementById('designer-name-input');
+    const name = input.value.trim();
+    const errorEl = document.getElementById('designer-name-error');
+
+    if (name.length < 2) {
+      errorEl.textContent = 'Enter your name (at least 2 characters).';
+      return;
+    }
+    if (name.length > 40) {
+      errorEl.textContent = 'Keep it under 40 characters.';
+      return;
+    }
+
+    screenState.designerName = name;
+    closeNameModal();
+    publishJourney();
+  }
+
+  function publishJourney() {
+    screenState.status = "preview_ready";
 
     const sessionRef = window.firebaseRef(window.firebaseDb, 'sessions/' + screenState.sessionId);
 
@@ -472,7 +717,7 @@
     window.firebaseSet(sessionRef, screenState)
       .then(() => {
         btn.innerHTML = 'Finish & Preview';
-        showToast('Journey published! Check the mobile preview device.');
+        showToast(`Published as ${screenState.designerName}! Check the mobile preview device.`);
       })
       .catch((error) => {
         btn.innerHTML = 'Finish & Preview';
